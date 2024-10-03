@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Subscribe to Stream</title>
+</head>
+<body>
+    <button onclick="doWHEP()">Subscribe</button>
+    <h3>Video</h3>
+    <video id="videoPlayer" autoplay muted controls style="width: 500px;"></video>
+    <h3>ICE Connection States</h3>
+    <div id="iceConnectionStates"></div>
+
+    <script>
+        let peerConnection;
+
+        const createPeerConnection = () => {
+            peerConnection = new RTCPeerConnection();
+            peerConnection.oniceconnectionstatechange = () => {
+                let el = document.createElement('p');
+                el.textContent = peerConnection.iceConnectionState;
+                document.getElementById('iceConnectionStates').appendChild(el);
+            };
+        };
+
+        window.doWHEP = () => {
+            const streamID = prompt("Enter Stream ID");  // Ask for the stream ID to subscribe to
+            createPeerConnection();
+            peerConnection.addTransceiver('video', { direction: 'recvonly' });
+
+            peerConnection.ontrack = function (event) {
+                document.getElementById('videoPlayer').srcObject = event.streams[0];
+            };
+
+            peerConnection.createOffer().then(offer => {
+                return peerConnection.setLocalDescription(offer);
+            }).then(() => {
+                return fetch(`/whep/${streamID}`, {  // Use the provided stream ID
+                    method: 'POST',
+                    body: peerConnection.localDescription.sdp,
+                    headers: {
+                        'Authorization': 'Bearer none',
+                        'Content-Type': 'application/sdp'
+                    }
+                });
+            }).then(response => {
+                return response.text();
+            }).then(answer => {
+                return peerConnection.setRemoteDescription({ sdp: answer, type: 'answer' });
+            }).catch(error => {
+                console.error('Error during subscribe:', error);
+            });
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Publish Stream</title>
+</head>
+<body>
+    <button onclick="doWHIP()">Publish</button>
+    <h3>Video</h3>
+    <video id="videoPlayer" autoplay muted controls style="width: 500px;"></video>
+    <h3>Stream ID</h3>
+    <p id="streamIdDisplay"></p>
+    <h3>ICE Connection States</h3>
+    <div id="iceConnectionStates"></div>
+
+    <script>
+        let peerConnection;
+        let streamID;
+
+        const generateStreamID = () => {
+            // Генерация уникального Stream ID
+            return 'stream_' + Math.random().toString(36).substr(2, 9);
+        };
+
+        const createPeerConnection = () => {
+            peerConnection = new RTCPeerConnection();
+            peerConnection.oniceconnectionstatechange = () => {
+                let el = document.createElement('p');
+                el.textContent = peerConnection.iceConnectionState;
+                document.getElementById('iceConnectionStates').appendChild(el);
+            };
+        };
+
+        window.doWHIP = () => {
+            streamID = generateStreamID();
+            document.getElementById('streamIdDisplay').textContent = `Your Stream ID: ${streamID}`;
+            createPeerConnection();
+            navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                .then(stream => {
+                    document.getElementById('videoPlayer').srcObject = stream;
+                    stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+
+                    peerConnection.createOffer().then(offer => {
+                        return peerConnection.setLocalDescription(offer);
+                    }).then(() => {
+                        return fetch(`/whip/${streamID}`, {
+                            method: 'POST',
+                            body: peerConnection.localDescription.sdp,
+                            headers: {
+                                'Authorization': 'Bearer none',
+                                'Content-Type': 'application/sdp'
+                            }
+                        });
+                    }).then(response => {
+                        return response.text();
+                    }).then(answer => {
+                        return peerConnection.setRemoteDescription({ sdp: answer, type: 'answer' });
+                    }).catch(error => {
+                        console.error('Error during publish:', error);
+                    });
+                }).catch(error => {
+                    console.error('Error accessing media devices:', error);
+                });
+        };
+    </script>
+</body>
+</html>
